@@ -1,0 +1,106 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.html'
+      - '*.png'
+      - 'sw.js'
+      - 'manifest.webmanifest'
+      - 'debug.keystore.b64'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: ওয়েব ফাইল www ফোল্ডারে রাখা
+        run: |
+          mkdir www
+          cp *.html *.png sw.js manifest.webmanifest www/
+
+      - name: Capacitor ও android ফোল্ডার বানানো
+        run: |
+          echo '{"name":"amar-prostuti","version":"1.0.0","private":true}' > package.json
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7
+          cat > capacitor.config.json <<'JSON'
+          {
+            "appId": "com.amarprostuti.app",
+            "appName": "আমার প্রস্তুতি",
+            "webDir": "www",
+            "backgroundColor": "#f3efe8",
+            "android": { "adjustMarginsForEdgeToEdge": "force" }
+          }
+          JSON
+          npx cap add android
+          npx cap sync android
+
+      - name: অ্যাপের আইকন বসানো
+        continue-on-error: true
+        run: |
+          set -e
+          IM=$(command -v magick || command -v convert || true)
+          if [ -z "$IM" ]; then sudo apt-get install -y imagemagick; IM=$(command -v convert); fi
+          RES=android/app/src/main/res
+          for spec in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
+            IFS=: read d l f <<< "$spec"
+            mkdir -p $RES/mipmap-$d
+            rm -f $RES/mipmap-$d/ic_launcher.webp $RES/mipmap-$d/ic_launcher_round.webp
+            $IM icon-maskable-512.png -resize ${l}x${l} $RES/mipmap-$d/ic_launcher.png
+            cp $RES/mipmap-$d/ic_launcher.png $RES/mipmap-$d/ic_launcher_round.png
+            $IM icon-maskable-512.png -resize ${f}x${f} $RES/mipmap-$d/app_icon_fg.png
+          done
+          mkdir -p $RES/values $RES/mipmap-anydpi-v26
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><color name="app_icon_bg">#2f6b4f</color></resources>' > $RES/values/app_icon_colors.xml
+          for n in ic_launcher ic_launcher_round; do
+            echo '<?xml version="1.0" encoding="utf-8"?><adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android"><background android:drawable="@color/app_icon_bg"/><foreground android:drawable="@mipmap/app_icon_fg"/></adaptive-icon>' > $RES/mipmap-anydpi-v26/$n.xml
+          done
+
+      - name: স্থির সাইনিং কী বসানো (আপডেট ইনস্টল করা যাবে)
+        run: |
+          mkdir -p ~/.android
+          if [ -f debug.keystore.b64 ]; then base64 -d debug.keystore.b64 > ~/.android/debug.keystore; echo "কী পাওয়া গেছে"; else echo "debug.keystore.b64 নেই — নতুন কী হবে"; fi
+
+      - name: APK বানানো
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: APK-র নাম ঠিক করা
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk amar-prostuti.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amar-prostuti-apk
+          path: amar-prostuti.apk
+
+      - name: Releases-এ রাখা
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: আমার প্রস্তুতি — APK #${{ github.run_number }}
+          body: নিচের Assets থেকে amar-prostuti.apk ডাউনলোড করে ফোনে ইনস্টল করুন।
+          files: amar-prostuti.apk
+          make_latest: true
