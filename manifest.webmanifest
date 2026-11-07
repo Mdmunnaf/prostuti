@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "আমার প্রস্তুতি",
+  "short_name": "প্রস্তুতি",
+  "description": "অনুশীলনের মাধ্যমে প্রস্তুতি — অফলাইনেও চলে",
+  "lang": "bn",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3efe8",
+  "theme_color": "#f3efe8",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
